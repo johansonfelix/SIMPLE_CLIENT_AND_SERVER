@@ -32,8 +32,11 @@ Both client and server receive arguments (port and server name) to bind their so
  9. You can use the following commands:
       
      NICK - change nickname		     => NICK <NEW NICKNAME> 
+	
      PRIVMSG - send message to channel  => PRIVMSG #global :<YOUR MESSAGE>
+	
      NOTICE - send message to channel => NOTICE #global :<YOUR MESSAGE>
+	
      QUIT - lease server and quit client => QUIT   | QUIT : <YOUR REASON>
  
  
