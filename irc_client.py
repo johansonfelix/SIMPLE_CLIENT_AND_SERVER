@@ -13,24 +13,20 @@ Description:
 import argparse
 import asyncio
 import logging
-import threading
-from random import random
-
 import patterns
 import view
 import time
 import socket
 
-logging.basicConfig(filename='view.log', level=logging.DEBUG)
+logging.basicConfig(filename='clientView.log', level=logging.DEBUG)
 logger = logging.getLogger()
-
-result_available = threading.Event()
 
 
 class IRCClient(patterns.Subscriber):
 
     def __init__(self):
         super().__init__()
+        self.view = None
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.username = None
         self.nickname = None
@@ -38,11 +34,10 @@ class IRCClient(patterns.Subscriber):
         self.HOST = str()
         self.PORT = 0
 
-    def set_view(self, view):
-        self.view = view
+    def set_view(self, v):
+        self.view = v
 
     def update(self, msg):
-        # Will need to modify this
         if not isinstance(msg, str):
             raise TypeError(f"Update argument needs to be a string")
         elif not len(msg):
@@ -52,49 +47,48 @@ class IRCClient(patterns.Subscriber):
         self.process_input(msg)
 
     def process_input(self, msg):
-        # Will need to modify this
 
-        if msg == 'QUIT':
-            self.view.put_msg("\n" + msg)
-            # Command that leads to the closure of the process
+        if self.username is None or self.nickname is None:
+            self.view.put_msg("\nCannot Register Connection. No nickname and/or username provided. Try again "
+                              "later.\nExiting...")
             raise KeyboardInterrupt
 
+        # QUIT COMMAND
+        if msg.startswith('QUIT'):
+            # self.view.put_msg("\n" + msg)
+            self.send_request(msg)
+            self.receive()
+            raise KeyboardInterrupt
+
+        # NICK COMMAND
         elif msg.startswith('NICK'):
-            self.view.put_msg("\n" + msg)
-            #make sure length of nickname is max 9 chars!
-            response = self.send_request(msg)
-            self.view.put_msg(f'\n{response}')
+            # self.view.put_msg("\n" + msg)
 
-        elif msg.startswith('PRIVMSG'):
-            self.view.put_msg("\n" + msg)
-            # make sure length of nickname is max 9 chars!
-            response = self.send_request(msg)
-            self.view.put_msg(f'\n{response}')
+            if 0 < (len(msg.split(" ")[1])) <= 9:
+                self.send_request(msg)
+                self.receive()
+            else:
+                return
 
-        elif msg.startswith('NOTICE'):
-            self.view.put_msg("\n" + msg)
-            # make sure length of nickname is max 9 chars!
-            response = self.send_request(msg)
-            self.view.put_msg(f'\n{response}')
+        # PRIVMSG AND NOTICE COMMAND
+        elif msg.split(" ")[0] == 'PRIVMSG' or msg.split(" ")[0] == 'NOTICE':
 
-
+            if msg.split(" ")[1] is None:
+                return
+            else:
+                self.send_request(msg)
+                self.receive()
         else:
-            # CHANGEpy
-            self.view.put_msg('\nInvalid Command\n')
+            self.view.put_msg(f'\n{msg} - INVALID COMMAND')
 
     def add_msg(self, msg):
         self.view.add_msg(self.username, msg)
 
+    # SEND DATA TO SERVER
     def send_request(self, msg):
         self.s.sendall(str.encode(msg))
-        data = self.s.recv(1024).decode('UTF-8')
-        return data
 
-    def verify_host_port(self, host, port):
-
-        if host is not None and port is not None:
-            return port.isnumeric() and not host.isnumeric()
-
+    # READER FOR NICK AND USER
     def input_nick_user(self):
         done = False
 
@@ -102,11 +96,10 @@ class IRCClient(patterns.Subscriber):
             _str = self.view.get_input()
             self.view.put_msg(f"\n{_str.decode('UTF-8')}")
             _str = _str.decode('UTF-8').split(" ")
-            if _str[0] == 'NICK' and _str[1] is not None:
-                if len(_str[1]) <= 9:
-                    self.nickname = _str[1]
-                    if self.username is not None:
-                        done = True
+            if _str[0] == 'NICK' and 0 < len(_str[1]) <= 9:
+                self.nickname = _str[1]
+                if self.username is not None:
+                    done = True
 
             elif _str[0] == 'USER' and _str[1] is not None:
                 self.username = _str[1]
@@ -115,94 +108,68 @@ class IRCClient(patterns.Subscriber):
 
             else:
                 if not done:
-                    self.view.put_msg("\nPlease enter valid username and nickname to connect using commands NICK and "
-                                      "USER.")
+                    if self.nickname is None and self.username is None:
+                        self.view.put_msg(
+                            "\nPlease enter valid nickname and username to connect using commands NICK and USER")
+                    elif self.nickname is None:
+                        self.view.put_msg("\nPlease enter valid nickname to connect using NICK command")
+                    elif self.username is None:
+                        self.view.put_msg("\nPlease enter valid username to connect using USER command")
 
+    # client driver
     async def run(self):
 
         """
-        Driver of your IRC Client
+        Driver of IRC Client
         """
+
         # Check valid HOST and PORT, make port an int
-        if self.verify_host_port(host=self.HOST, port=self.PORT):
+        if verify_host_port(host=self.HOST, port=self.PORT):
             self.PORT = int(self.PORT)
         else:
             self.view.put_msg(f"Invalid arguments.\n")
             raise KeyboardInterrupt
 
-        # Wait for Client nickname and username
-
+        # Wait for user to enter Client nickname and username
         self.input_nick_user()
 
-        # self.connect_to_server() REGISTER TO SERVER, CHECK USERNAME/NICKNAME EXITS, ETC.
+        # REGISTER CLIENT TO SERVER, IF NICK already exists then CONNECTION CLOSES
+        try:
+            self.s.settimeout(3)
+            self.s.connect((self.HOST, self.PORT))
+        except socket.error:
+            self.view.put_msg("\nERR_NOSUCHSERVER ")
+            raise KeyboardInterrupt
 
-        self.s.connect((self.HOST, self.PORT))
         _str = 'NICK ' + self.nickname + " USER " + self.username
         self.s.sendall(str.encode(_str))
-        data = self.s.recv(1024).decode('UTF-8')
-        if data.startswith("Welcome"):
-            self.view.put_msg(f"\n{data}")
-        else:
-            self.view.put_msg(f"\n{data}")
-            self.close()
+        self.receive()
 
-
-
-
-
-
-
-
-        # self.view.put_msg("\nSuccess!")
-        # exit()
-        # # Once client nickname and username received, setup connection with server
-        # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        #     s.connect((self.HOST, self.PORT))
-        #     s.sendall(b'Hello, world')
-        #     data = s.recv(1024)
-
-        # Loop receving input from client. If client
-
-        # Remove this section in your code, simply for illustration purposes
-        # for x in range(10):
-        #     self.add_msg(f"call after View.loop: {x}")
-        #     await asyncio.sleep(2)
-
+    # TERMINATE CLIENT
     def close(self):
-        # Terminate connection
+
         logger.debug(f"Closing IRC Client object")
         self.view.put_msg(f"\nClosing IRC Client object")
         time.sleep(2.5)
 
-    # MAKE SURE NICKNAME IS 8 CHARACTERS LONG
-    def input_nick(self):
-        self.view.put_msg("\nNickname: ")
-        nickname = self.view.get_input().decode('UTF-8')
-        self.view.put_msg(nickname)
-
-        while not len(nickname):
-            self.view.put_msg("\nNickname: ")
-            nickname = self.view.get_input().decode('UTF-8')
-            self.view.put_msg(nickname)
-        return nickname
-
-    def input_username(self):
-        self.view.put_msg("\nUsername: ")
-        username = self.view.get_input().decode('UTF-8')
-        self.view.put_msg(username)
-
-        while not len(username):
-            self.view.put_msg("\nUsername: ")
-            username = self.view.get_input().decode('UTF-8')
-            self.view.put_msg(username)
-        return username
+    # receive data from server
+    def receive(self):
+        self.s.settimeout(1)
+        try:
+            while True:
+                data = self.s.recv(1024).decode('UTF-8')
+                if not data:
+                    break
+                self.view.put_msg(f"\n{data}")
+        except socket.timeout:
+            pass
 
 
-def main(args):
-    # Pass your arguments where necessary to client
+# MAIN METHOD - pass arguments and sync view with backend client
+def main(arguments):
     client = IRCClient()
-    client.HOST = args.server
-    client.PORT = args.port
+    client.HOST = arguments.server
+    client.PORT = arguments.port
 
     logger.info(f"Client object created")
     with view.View() as v:
@@ -212,9 +179,6 @@ def main(args):
         v.add_subscriber(client)
         logger.debug(f"IRC Client is subscribed to the View (to receive user input)")
 
-        # v.put_msg("Enter Nickname: ")
-        # nickname = v.get_input().decode('utf-8')
-        # v.put_msg(f'{nickname}\n')
         async def inner_run():
             await asyncio.gather(
                 v.run(),
@@ -224,13 +188,19 @@ def main(args):
 
         try:
             asyncio.run(inner_run())
-        except KeyboardInterrupt as e:
+        except KeyboardInterrupt:
             logger.debug(f"Signifies end of process")
     client.close()
 
 
+# verify port number is a number
+def verify_host_port(host, port):
+    if host is not None and port is not None:
+        return port.isnumeric() and not host.isnumeric()
+
+
+# receive arguments from terminal
 if __name__ == "__main__":
-    # Parse your command line arguments here
     parser = argparse.ArgumentParser(prog='irc_client')
     parser.add_argument('--server', help='Target server to initiate a connection to.')
     parser.add_argument('--port', help='Target port to use.')
