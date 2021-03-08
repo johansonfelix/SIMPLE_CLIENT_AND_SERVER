@@ -16,6 +16,7 @@ Both client and server receive arguments (port and server name) to bind their so
 
 ## Imports:	
 [client] argparse, asyncio, logging, patterns, view, time, socket
+
 [server] argparse, logging, socket, defaultdic from collections
 
 
