@@ -26,18 +26,18 @@ Both client and server receive arguments (port and server name) to bind their so
  3. In another terminal repeat step 1 and Execute the irc_client.py  with --server and port as arguments : python irc_client.py --server <YOUR HOST NAME> --port<PORT NUMBER>
  4. The welcome banner should appear.
  5. In order to connect the client to the server, you must register a connection by entering a nickname and username.
- 6. Enter 'NICK' <YOUR NICKNAME>               //nickname must be 9 characters max
- 7. Enter 'USER' <YOUR USERNAME>
+ 6. Enter 'NICK' [YOUR NICKNAME]               //nickname must be 9 characters max
+ 7. Enter 'USER' [YOUR USERNAME]
  8. If nickname is valid and unique, then a successful connection is made with the server.
  9. You can use the following commands:
       
-     NICK - change nickname		     => NICK <NEW NICKNAME> 
+     NICK - change nickname			=> NICK [NEW NICKNAME]
 	
-     PRIVMSG - send message to channel  => PRIVMSG #global :<YOUR MESSAGE>
+     PRIVMSG - send message to channel  	=> PRIVMSG #global :[YOUR MESSAGE]
 	
-     NOTICE - send message to channel => NOTICE #global :<YOUR MESSAGE>
+     NOTICE - send message to channel 		=> NOTICE #global :[YOUR MESSAGE]
 	
-     QUIT - lease server and quit client => QUIT   | QUIT : <YOUR REASON>
+     QUIT - lease server and quit client 	=> QUIT   | QUIT : [YOUR REASON]
  
  
 GITHUB REPOSITORY:  https://github.com/johansonfelix/SIMPLE_CLIENT_AND_SERVER
